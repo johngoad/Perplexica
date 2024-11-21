@@ -171,11 +171,22 @@ const useSocket = (
           }
         }, 10000);
 
-        ws.onopen = () => {
-          console.log('[DEBUG] open');
-          clearTimeout(timeoutId);
-          setIsWSReady(true);
-        };
+        ws.addEventListener('message', (e) => {
+          const data = JSON.parse(e.data);
+          if (data.type === 'signal' && data.data === 'open') {
+            const interval = setInterval(() => {
+              if (ws.readyState === 1) {
+                setIsWSReady(true);
+                clearInterval(interval);
+              }
+            }, 5);
+            clearTimeout(timeoutId);
+            console.log('[DEBUG] opened');
+          }
+          if (data.type === 'error') {
+            toast.error(data.data);
+          }
+        });
 
         ws.onerror = () => {
           clearTimeout(timeoutId);
@@ -188,13 +199,6 @@ const useSocket = (
           setError(true);
           console.log('[DEBUG] closed');
         };
-
-        ws.addEventListener('message', (e) => {
-          const data = JSON.parse(e.data);
-          if (data.type === 'error') {
-            toast.error(data.data);
-          }
-        });
 
         setWs(ws);
       };
@@ -314,6 +318,7 @@ const ChatWindow = ({ id }: { id?: string }) => {
         console.log('[DEBUG] closed');
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const messagesRef = useRef<Message[]>([]);
@@ -325,11 +330,13 @@ const ChatWindow = ({ id }: { id?: string }) => {
   useEffect(() => {
     if (isMessagesLoaded && isWSReady) {
       setIsReady(true);
+      console.log('[DEBUG] ready');
     }
   }, [isMessagesLoaded, isWSReady]);
 
-  const sendMessage = async (message: string) => {
+  const sendMessage = async (message: string, messageId?: string) => {
     if (loading) return;
+
     setLoading(true);
     setMessageAppeared(false);
 
@@ -337,12 +344,13 @@ const ChatWindow = ({ id }: { id?: string }) => {
     let recievedMessage = '';
     let added = false;
 
-    const messageId = crypto.randomBytes(7).toString('hex');
+    messageId = messageId ?? crypto.randomBytes(7).toString('hex');
 
     ws?.send(
       JSON.stringify({
         type: 'message',
         message: {
+          messageId: messageId,
           chatId: chatId!,
           content: message,
         },
@@ -469,15 +477,15 @@ const ChatWindow = ({ id }: { id?: string }) => {
       return [...prev.slice(0, messages.length > 2 ? index - 1 : 0)];
     });
 
-    sendMessage(message.content);
+    sendMessage(message.content, message.messageId);
   };
 
   useEffect(() => {
-    if (isReady && initialMessage) {
+    if (isReady && initialMessage && ws?.readyState === 1) {
       sendMessage(initialMessage);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReady, initialMessage]);
+  }, [ws?.readyState, isReady, initialMessage, isWSReady]);
 
   if (hasError) {
     return (
@@ -496,7 +504,7 @@ const ChatWindow = ({ id }: { id?: string }) => {
       <div>
         {messages.length > 0 ? (
           <>
-            <Navbar messages={messages} />
+            <Navbar chatId={chatId!} messages={messages} />
             <Chat
               loading={loading}
               messages={messages}

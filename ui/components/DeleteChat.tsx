@@ -16,10 +16,12 @@ const DeleteChat = ({
   chatId,
   chats,
   setChats,
+  redirect = false,
 }: {
   chatId: string;
   chats: Chat[];
   setChats: (chats: Chat[]) => void;
+  redirect?: boolean;
 }) => {
   const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -44,6 +46,10 @@ const DeleteChat = ({
       const newChats = chats.filter((chat) => chat.id !== chatId);
 
       setChats(newChats);
+
+      if (redirect) {
+        window.location.href = '/';
+      }
     } catch (err: any) {
       toast.error(err.message);
     } finally {
